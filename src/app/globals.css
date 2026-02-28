@@ -17,6 +17,13 @@ body {
   min-height: 100vh;
 }
 
+/* Prevent zoom on mobile devices */
+input,
+textarea,
+select {
+  font-size: 14px !important;
+}
+
 .glass {
   background: rgba(30, 41, 59, 0.6);
   backdrop-filter: blur(12px);

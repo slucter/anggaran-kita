@@ -78,32 +78,42 @@ function CategoryCard({
                 />
                 <button onClick={() => setCategories(categories.filter((_: any, i: number) => i !== catIdx))} className="text-red-400/30 hover:text-red-400 shrink-0"><Trash2 size={16} /></button>
             </div>
-            {cat.isExpanded && (
-                <div className="space-y-2 pt-4">
-                    {cat.items.map((item: any, itemIdx: number) => (
-                        <div key={itemIdx} className="space-y-2 pb-2 border-b border-white/5 last:border-b-0 last:pb-0">
-                            <div className="flex gap-2 items-center">
-                                <input
-                                    className="input-field flex-1 text-sm font-black py-3"
-                                    placeholder="Nama Item (e.g. Bebelove)"
-                                    value={item.name}
-                                    onChange={(e) => handleItemChange(catIdx, itemIdx, 'name', e.target.value)}
-                                />
-                                <button onClick={() => handleRemoveItem(catIdx, itemIdx)} className="text-red-400/50 hover:text-red-400 transition-all p-2"><Trash2 size={18} /></button>
-                            </div>
-                            <input
-                                className="input-field w-full text-base font-bold py-3 text-secondary"
-                                type="text"
-                                inputMode="numeric"
-                                placeholder="0"
-                                value={formatNumber(item.amount)}
-                                onChange={(e) => handleAmountInput(e.target.value, (n: number) => handleItemChange(catIdx, itemIdx, 'amount', n))}
-                            />
+            <AnimatePresence initial={false}>
+                {cat.isExpanded && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                        className="overflow-hidden"
+                    >
+                        <div className="space-y-2 pt-4">
+                            {cat.items.map((item: any, itemIdx: number) => (
+                                <div key={itemIdx} className="space-y-2 pb-2 border-b border-white/5 last:border-b-0 last:pb-0">
+                                    <div className="flex gap-2 items-center">
+                                        <input
+                                            className="input-field flex-1 text-sm font-black py-3"
+                                            placeholder="Nama Item (e.g. Bebelove)"
+                                            value={item.name}
+                                            onChange={(e) => handleItemChange(catIdx, itemIdx, 'name', e.target.value)}
+                                        />
+                                        <button onClick={() => handleRemoveItem(catIdx, itemIdx)} className="text-red-400/50 hover:text-red-400 transition-all p-2"><Trash2 size={18} /></button>
+                                    </div>
+                                    <input
+                                        className="input-field w-full text-base font-bold py-3 text-secondary"
+                                        type="text"
+                                        inputMode="numeric"
+                                        placeholder="0"
+                                        value={formatNumber(item.amount)}
+                                        onChange={(e) => handleAmountInput(e.target.value, (n: number) => handleItemChange(catIdx, itemIdx, 'amount', n))}
+                                    />
+                                </div>
+                            ))}
+                            <button onClick={() => handleAddItem(catIdx)} className="w-full py-4 border border-dashed border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-white/5 hover:border-white/20 transition-all">+ TAMBAH ITEM</button>
                         </div>
-                    ))}
-                    <button onClick={() => handleAddItem(catIdx)} className="w-full py-4 border border-dashed border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-white/5 hover:border-white/20 transition-all">+ TAMBAH ITEM</button>
-                </div>
-            )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </Reorder.Item>
     );
 }
@@ -737,7 +747,7 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                         <div className="fixed bottom-0 left-0 right-0 px-6 py-6 bg-slate-950 border-t border-white/10 z-50">
                             <div className="flex gap-3 max-w-sm mx-auto">
                                 <button onClick={handleSaveMonth} className="btn-primary flex-1 flex items-center justify-center gap-2 text-[10px] font-bold py-3 shadow-lg">
-                                    <Save size={16} /> SIMPAN ANGGARAN
+                                    <Save size={16} /> SIMPAN
                                 </button>
                                 <button onClick={() => setShowTemplateModal(true)} className="btn-secondary flex-1 flex items-center justify-center gap-2 text-[10px] font-bold py-3 shadow-lg">
                                     <Copy size={16} /> SIMPAN TEMPLATE
