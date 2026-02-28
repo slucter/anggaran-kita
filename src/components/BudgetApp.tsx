@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+
 import {
     Plus, Trash2, ChevronDown, ChevronUp, Save,
     CheckCircle2, Circle, Wallet, ArrowDownCircle,
@@ -11,7 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { saveFullTemplate, updateItemCheckStatus, cloneBudget, getBudgetForMonth, getTemplates, deleteTemplate, login, register } from '@/lib/actions';
-import { User, LogOut, UserPlus, Key, RefreshCw } from 'lucide-react';
+import { User, LogOut, UserPlus, Key, RefreshCw, GripVertical } from 'lucide-react';
 
 function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -52,7 +53,11 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
 
     const [incomes, setIncomes] = useState<Income[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
-    const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+    const [isOffline, setIsOffline] = useState(false);
+
+    useEffect(() => {
+        setIsOffline(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+    }, []);
 
     const monthKey = useMemo(() => {
         const year = currentDate.getFullYear();
@@ -68,6 +73,7 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
     const [masterTemplates, setMasterTemplates] = useState<any[]>(initialTemplates);
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [newTemplateName, setNewTemplateName] = useState('');
+    const dragIndex = useRef<number | null>(null);
 
     // Storage key scoped per user — prevents data leakage between accounts
     const storageKey = useMemo(() => user ? `budget_${user.id}_${monthKey}` : null, [user, monthKey]);
@@ -125,7 +131,7 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                 const serverCategories = budget.expenseCategories.map((c: any) => ({
                     id: c.id,
                     name: c.name,
-                    isExpanded: true,
+                    isExpanded: false,
                     items: c.expenseItems.map((item: any) => ({
                         id: item.id,
                         name: item.name,
@@ -596,7 +602,7 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                             <button onClick={() => setMode('templates')} className="btn-secondary w-full text-[10px] font-black tracking-widest">GUNAKAN TEMPLATE</button>
                             <button onClick={() => {
                                 setIncomes([{ name: 'Gaji', amount: 0 }]);
-                                setCategories([{ name: 'Umum', isExpanded: true, items: [] }]);
+                                setCategories([{ name: 'Umum', isExpanded: false, items: [] }]);
                                 setMode('edit');
                             }} className="btn-primary w-full text-[10px] font-black tracking-widest">BUAT BARU</button>
                         </div>
@@ -636,20 +642,39 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                         <section className="space-y-4">
                             <div className="flex justify-between items-center px-1">
                                 <h2 className="text-xs font-black flex items-center gap-2 uppercase tracking-widest"><TrendingDown className="text-red-400" size={16} /> Pengeluaran</h2>
-                                <button onClick={() => setCategories([...categories, { name: 'Kategori Baru', isExpanded: true, items: [] }])} className="btn-secondary text-[10px] font-black tracking-widest px-3 py-1.5">+ KATEGORI</button>
+                                <button onClick={() => setCategories([...categories, { name: 'Kategori Baru', isExpanded: false, items: [] }])} className="btn-secondary text-[10px] font-black tracking-widest px-3 py-1.5">+ KATEGORI</button>
                             </div>
                             {categories.map((cat, catIdx) => (
-                                <div key={catIdx} className="glass-card overflow-hidden">
-                                    <div className="flex items-center gap-3">
+                                <div
+                                    key={catIdx}
+                                    draggable
+                                    onDragStart={() => { dragIndex.current = catIdx; }}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={() => {
+                                        if (dragIndex.current === null || dragIndex.current === catIdx) return;
+                                        const n = [...categories];
+                                        const [moved] = n.splice(dragIndex.current, 1);
+                                        n.splice(catIdx, 0, moved);
+                                        setCategories(n);
+                                        dragIndex.current = null;
+                                    }}
+                                    className="glass-card overflow-hidden select-none"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        {/* Drag handle */}
+                                        <div className="text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing shrink-0">
+                                            <GripVertical size={18} />
+                                        </div>
+                                        {/* Expand toggle */}
                                         <button onClick={() => {
                                             const n = [...categories]; n[catIdx].isExpanded = !n[catIdx].isExpanded; setCategories(n);
-                                        }} className="text-primary">{cat.isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>
+                                        }} className="text-primary shrink-0">{cat.isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>
                                         <input
-                                            className="bg-transparent text-sm font-black text-white outline-none flex-1  border-white/5 uppercase tracking-wide"
+                                            className="bg-transparent text-sm font-black text-white outline-none flex-1 border-white/5 uppercase tracking-wide"
                                             value={cat.name}
                                             onChange={(e) => { const n = [...categories]; n[catIdx].name = e.target.value; setCategories(n); }}
                                         />
-                                        <button onClick={() => setCategories(categories.filter((_, i) => i !== catIdx))} className="text-red-400/30 hover:text-red-400"><Trash2 size={16} /></button>
+                                        <button onClick={() => setCategories(categories.filter((_, i) => i !== catIdx))} className="text-red-400/30 hover:text-red-400 shrink-0"><Trash2 size={16} /></button>
                                     </div>
                                     {cat.isExpanded && (
                                         <div className="space-y-2 pt-4">
