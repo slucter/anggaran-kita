@@ -675,8 +675,12 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                 className="glass-card bg-gradient-to-br from-primary/20 to-secondary/20 border-primary/20 relative overflow-hidden"
             >
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-sm font-black flex items-center gap-2 text-white uppercase tracking-tighter">
-                        <Wallet className="text-primary" size={18} /> {mode === 'checklist' ? 'Eksekusi' : (monthlyBudgetName || 'Perencanaan')}
+                    <h1 className="text-sm font-black flex items-start gap-2 text-white uppercase tracking-tighter">
+                        <Wallet className="text-primary mt-1" size={18} />
+                        <div className="flex flex-col leading-tight">
+                            <span>{mode === 'checklist' ? 'Eksekusi' : (monthlyBudgetName || 'Perencanaan')}</span>
+                            {!activeBudgetId && <span className="text-[10px] text-muted-foreground tracking-widest leading-none mt-0.5">{monthLabel}</span>}
+                        </div>
                     </h1>
                     <div className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest", balance >= 0 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400")}>
                         Sisa: {formatIDR(balance)}
