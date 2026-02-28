@@ -33,6 +33,7 @@ export const templates = pgTable("templates", {
     name: text("name").notNull(),
     targetMonth: text("target_month"), // Format: YYYY-MM
     isTemplate: boolean("is_template").default(false).notNull(),
+    type: text("type").default("main").notNull(), // 'main' or 'sub'
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

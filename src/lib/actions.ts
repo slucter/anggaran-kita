@@ -118,11 +118,11 @@ export async function getTemplates() {
     });
 }
 
-export async function getBudgetForMonth(month: string) {
+export async function getBudgetsForMonth(month: string) {
     const session = await getSession();
-    if (!session) return null;
+    if (!session) return [];
 
-    return await db.query.templates.findFirst({
+    return await db.query.templates.findMany({
         where: (t, { and, eq }) => and(
             eq(t.targetMonth, month),
             eq(t.isTemplate, false),
@@ -136,13 +136,16 @@ export async function getBudgetForMonth(month: string) {
                 },
             },
         },
+        orderBy: (t, { asc }) => [asc(t.createdAt)], // Keep them in creation order, 'main' is usually first
     });
 }
 
 export async function saveFullTemplate(data: {
+    id?: string;
     name: string;
     targetMonth?: string;
     isTemplate?: boolean;
+    type?: 'main' | 'sub';
     incomes: { name: string; amount: number }[];
     categories: {
         name: string;
@@ -152,12 +155,23 @@ export async function saveFullTemplate(data: {
     const session = await getSession();
     if (!session) throw new Error("Unauthorized");
 
-    // Delete existing if it's a monthly budget for that month
-    if (data.targetMonth && !data.isTemplate) {
+    // Delete existing if we're updating a specific budget by ID, 
+    // OR if we're saving a "main" budget for a month without ID (overwrite old main)
+    if (data.id) {
+        const existing = await db.query.templates.findFirst({
+            where: (t, { and, eq }) => and(eq(t.id, data.id!), eq(t.userId, session.userId))
+        });
+        if (existing) {
+            await db.delete(templates).where(eq(templates.id, existing.id));
+        }
+    } else if (data.targetMonth && !data.isTemplate && data.type !== 'sub') {
+        // Fallback: if no ID but saving to targetMonth (legacy compat)
+        // Only override the "main" budget for that month
         const existing = await db.query.templates.findFirst({
             where: (t, { and, eq }) => and(
                 eq(t.targetMonth, data.targetMonth!),
                 eq(t.isTemplate, false),
+                eq(t.type, 'main'),
                 eq(t.userId, session.userId)
             )
         });
@@ -167,9 +181,11 @@ export async function saveFullTemplate(data: {
     }
 
     const [template] = await db.insert(templates).values({
+        id: data.id || undefined, // Preserve ID if it existed and was passed
         name: data.name,
         targetMonth: data.targetMonth,
         isTemplate: data.isTemplate ?? false,
+        type: data.type || 'main',
         userId: session.userId
     }).returning();
 

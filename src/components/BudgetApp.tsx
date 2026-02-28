@@ -11,7 +11,7 @@ import {
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { saveFullTemplate, updateItemCheckStatus, cloneBudget, getBudgetForMonth, getTemplates, deleteTemplate, login, register } from '@/lib/actions';
+import { saveFullTemplate, updateItemCheckStatus, cloneBudget, getBudgetsForMonth, getTemplates, deleteTemplate, login, register } from '@/lib/actions';
 import { User, LogOut, UserPlus, Key, RefreshCw, GripVertical } from 'lucide-react';
 
 function cn(...inputs: ClassValue[]) {
@@ -147,10 +147,16 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
     const [masterTemplates, setMasterTemplates] = useState<any[]>(initialTemplates);
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [newTemplateName, setNewTemplateName] = useState('');
-    const dragIndex = useRef<number | null>(null);
+    const [monthlyBudgets, setMonthlyBudgets] = useState<any[]>([]);
+    const [activeBudgetId, setActiveBudgetId] = useState<string | null>(null);
+    const [showSubBudgetModal, setShowSubBudgetModal] = useState(false);
+    const [newSubBudgetName, setNewSubBudgetName] = useState('');
 
     // Storage key scoped per user — prevents data leakage between accounts
-    const storageKey = useMemo(() => user ? `budget_${user.id}_${monthKey}` : null, [user, monthKey]);
+    const storageKey = useMemo(() => {
+        if (!user) return null;
+        return activeBudgetId ? `budget_${user.id}_${activeBudgetId}` : `budget_${user.id}_${monthKey}_new`;
+    }, [user, monthKey, activeBudgetId]);
     const syncQueueKey = user ? `sync_queue_${user.id}` : null;
 
     // Offline Sync & Local Storage — only persist if user is authenticated
@@ -197,12 +203,20 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
     const loadMonthData = async (key: string) => {
         setLoading(true);
         try {
-            const budget = await getBudgetForMonth(key);
-            if (budget) {
-                // Server data takes priority — overwrite any local cache
-                setMonthlyBudgetName(budget.name);
-                const serverIncomes = budget.incomes.map((i: any) => ({ id: i.id, name: i.name, amount: Number(i.amount) }));
-                const serverCategories = budget.expenseCategories.map((c: any) => ({
+            const budgets = await getBudgetsForMonth(key);
+            if (budgets && budgets.length > 0) {
+                setMonthlyBudgets(budgets);
+
+                // Keep current active tab if it exists in new fetch, otherwise select first ('main' is usually first because of orderBy createdAt)
+                let targetBudget = budgets.find(b => b.id === activeBudgetId);
+                if (!targetBudget) {
+                    targetBudget = budgets[0];
+                    setActiveBudgetId(targetBudget.id);
+                }
+
+                setMonthlyBudgetName(targetBudget.name);
+                const serverIncomes = targetBudget.incomes.map((i: any) => ({ id: i.id, name: i.name, amount: Number(i.amount) }));
+                const serverCategories = targetBudget.expenseCategories.map((c: any) => ({
                     id: c.id || crypto.randomUUID(),
                     name: c.name,
                     isExpanded: false,
@@ -215,15 +229,18 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                 }));
                 setIncomes(serverIncomes);
                 setCategories(serverCategories);
-                // Sync local cache with fresh server data
-                if (storageKey) {
-                    localStorage.setItem(storageKey, JSON.stringify({ incomes: serverIncomes, categories: serverCategories }));
+
+                // Sync local cache
+                const activeStorageKey = `budget_${user?.id}_${targetBudget.id}`;
+                if (user) {
+                    localStorage.setItem(activeStorageKey, JSON.stringify({ incomes: serverIncomes, categories: serverCategories }));
                 }
             } else {
+                setMonthlyBudgets([]);
+                setActiveBudgetId(null);
                 setMonthlyBudgetName('');
                 setIncomes([]);
                 setCategories([]);
-                // Clear stale local cache for this month if server has nothing
                 if (storageKey) localStorage.removeItem(storageKey);
             }
         } catch (e) {
@@ -341,10 +358,16 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
         }
         setLoading(true);
         try {
+            const isFirstBudget = monthlyBudgets.length === 0;
+            const newType = isFirstBudget ? 'main' : 'sub';
+            const defaultName = isFirstBudget ? `Perencanaan` : `Sub Anggaran`;
+
             await saveFullTemplate({
-                name: `Anggaran ${monthLabel}`,
+                id: activeBudgetId || undefined,
+                name: monthlyBudgetName || defaultName,
                 targetMonth: monthKey,
                 isTemplate: false,
+                type: activeBudgetId ? undefined : newType,
                 incomes,
                 categories: categories.map(c => ({
                     name: c.name,
@@ -582,6 +605,41 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                 <button onClick={handleNextMonth} className="p-2 hover:bg-white/10 rounded-xl transition-all text-primary"><ChevronRight /></button>
             </div>
 
+            {/* Sub-Budget Tabs */}
+            {mode !== 'templates' && (
+                <div className="flex gap-2 overflow-x-auto pb-2 pt-1 no-scrollbar items-center">
+                    {monthlyBudgets.map((b) => (
+                        <button
+                            key={b.id}
+                            onClick={() => {
+                                setActiveBudgetId(b.id);
+                                const serverIncomes = b.incomes.map((i: any) => ({ ...i, amount: Number(i.amount) }));
+                                const serverCategories = b.expenseCategories.map((c: any) => ({
+                                    ...c,
+                                    isExpanded: false,
+                                    items: c.expenseItems.map((item: any) => ({ ...item, amount: Number(item.amount) }))
+                                }));
+                                setIncomes(serverIncomes);
+                                setCategories(serverCategories);
+                                setMonthlyBudgetName(b.name);
+                            }}
+                            className={cn("whitespace-nowrap px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest transition-all border",
+                                activeBudgetId === b.id
+                                    ? "bg-secondary text-white border-secondary shadow-lg shadow-secondary/20"
+                                    : "bg-white/5 text-muted-foreground border-white/5 hover:bg-white/10")}
+                        >
+                            {b.name}
+                        </button>
+                    ))}
+                    <button
+                        onClick={() => setShowSubBudgetModal(true)}
+                        className="whitespace-nowrap px-3 py-1.5 rounded-full text-[10px] font-black tracking-widest transition-all border bg-white/5 border-dashed border-white/20 text-primary hover:bg-white/10"
+                    >
+                        + SUB
+                    </button>
+                </div>
+            )}
+
             {/* Header Stats */}
             <motion.div
                 layout
@@ -589,7 +647,7 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
             >
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-sm font-black flex items-center gap-2 text-white uppercase tracking-tighter">
-                        <Wallet className="text-primary" size={18} /> {mode === 'checklist' ? 'Eksekusi' : 'Perencanaan'}
+                        <Wallet className="text-primary" size={18} /> {mode === 'checklist' ? 'Eksekusi' : (monthlyBudgetName || 'Perencanaan')}
                     </h1>
                     <div className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest", balance >= 0 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400")}>
                         Sisa: {formatIDR(balance)}
@@ -675,6 +733,8 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                         <div className="grid grid-cols-1 gap-3 mx-auto max-w-[200px]">
                             <button onClick={() => setMode('templates')} className="btn-secondary w-full text-[10px] font-black tracking-widest">GUNAKAN TEMPLATE</button>
                             <button onClick={() => {
+                                setMonthlyBudgetName('Perencanaan');
+                                setActiveBudgetId(null);
                                 setIncomes([{ name: 'Gaji', amount: 0 }]);
                                 setCategories([{ id: crypto.randomUUID(), name: 'Umum', isExpanded: false, items: [] }]);
                                 setMode('edit');
@@ -859,6 +919,46 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                             <div className="flex gap-3">
                                 <button onClick={() => setShowTemplateModal(false)} className="flex-1 py-3 text-[10px] font-black uppercase text-muted-foreground hover:bg-white/5 rounded-xl">Batal</button>
                                 <button onClick={handleSaveTemplate} className="flex-1 btn-primary py-3 text-[10px] font-black uppercase">Simpan</button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Sub-Budget Name Modal */}
+            <AnimatePresence>
+                {showSubBudgetModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 glass">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="bg-slate-900 border border-white/20 p-6 rounded-3xl w-full max-w-sm shadow-2xl"
+                        >
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-sm font-black uppercase text-white">Buat Sub-Anggaran</h3>
+                                <button onClick={() => setShowSubBudgetModal(false)} className="text-muted-foreground"><X size={20} /></button>
+                            </div>
+                            <input
+                                autoFocus
+                                className="input-field w-full mb-6 font-bold"
+                                placeholder="Nama (Contoh: Liburan)"
+                                value={newSubBudgetName}
+                                onChange={(e) => setNewSubBudgetName(e.target.value)}
+                            />
+                            <div className="flex gap-3">
+                                <button onClick={() => setShowSubBudgetModal(false)} className="flex-1 py-3 text-[10px] font-black uppercase text-muted-foreground hover:bg-white/5 rounded-xl">Batal</button>
+                                <button onClick={() => {
+                                    if (newSubBudgetName.trim()) {
+                                        setMonthlyBudgetName(newSubBudgetName);
+                                        setActiveBudgetId(null); // Null ID triggers creation on save
+                                        setIncomes([{ name: 'Sisa Dana/Alokasi', amount: 0 }]);
+                                        setCategories([{ id: crypto.randomUUID(), name: 'Pengeluaran', isExpanded: false, items: [] }]);
+                                        setShowSubBudgetModal(false);
+                                        setNewSubBudgetName('');
+                                        setMode('edit');
+                                    }
+                                }} className="flex-1 btn-primary py-3 text-[10px] font-black uppercase">Buat</button>
                             </div>
                         </motion.div>
                     </div>
