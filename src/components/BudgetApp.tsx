@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { saveFullTemplate, updateItemCheckStatus, cloneBudget, getBudgetForMonth, getTemplates, deleteTemplate, login, register } from '@/lib/actions';
-import { User, LogOut, UserPlus, Key } from 'lucide-react';
+import { User, LogOut, UserPlus, Key, RefreshCw } from 'lucide-react';
 
 function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -462,12 +462,22 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                         <p className="text-sm font-bold text-white tracking-tight">{user.fullname}</p>
                     </div>
                 </div>
-                <button
-                    onClick={() => logoutAction?.()}
-                    className="p-3 bg-white/5 text-muted-foreground rounded-xl hover:bg-white/10 hover:text-red-400 transition-all border border-white/5"
-                >
-                    <LogOut size={18} />
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => loadMonthData(monthKey)}
+                        disabled={loading}
+                        title="Refresh data"
+                        className="p-3 bg-white/5 text-muted-foreground rounded-xl hover:bg-white/10 hover:text-primary transition-all border border-white/5 disabled:opacity-40"
+                    >
+                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                    <button
+                        onClick={() => logoutAction?.()}
+                        className="p-3 bg-white/5 text-muted-foreground rounded-xl hover:bg-white/10 hover:text-red-400 transition-all border border-white/5"
+                    >
+                        <LogOut size={18} />
+                    </button>
+                </div>
             </div>
             {/* Month Navigation */}
             <div className="flex items-center justify-between bg-white/5 p-2 rounded-2xl border border-white/10 glass shadow-sm">
