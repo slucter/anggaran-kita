@@ -69,32 +69,39 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [newTemplateName, setNewTemplateName] = useState('');
 
-    // Offline Sync & Local Storage
+    // Storage key scoped per user — prevents data leakage between accounts
+    const storageKey = useMemo(() => user ? `budget_${user.id}_${monthKey}` : null, [user, monthKey]);
+    const syncQueueKey = user ? `sync_queue_${user.id}` : null;
+
+    // Offline Sync & Local Storage — only persist if user is authenticated
     useEffect(() => {
-        const savedData = localStorage.getItem(`budget_${monthKey}`);
+        if (!storageKey) return;
+        const savedData = localStorage.getItem(storageKey);
         if (savedData && incomes.length === 0 && categories.length === 0) {
             const parsed = JSON.parse(savedData);
             setIncomes(parsed.incomes || []);
             setCategories(parsed.categories || []);
         }
-    }, [monthKey]);
+    }, [storageKey]);
 
     useEffect(() => {
+        if (!storageKey) return;
         if (incomes.length > 0 || categories.length > 0) {
-            localStorage.setItem(`budget_${monthKey}`, JSON.stringify({ incomes, categories }));
+            localStorage.setItem(storageKey, JSON.stringify({ incomes, categories }));
         }
-    }, [incomes, categories, monthKey]);
+    }, [incomes, categories, storageKey]);
 
     useEffect(() => {
         const handleOnline = () => {
             setIsOffline(false);
-            const queue = localStorage.getItem('sync_queue');
+            if (!syncQueueKey) return;
+            const queue = localStorage.getItem(syncQueueKey);
             if (queue) {
                 const pending = JSON.parse(queue);
                 if (pending.length > 0) {
                     alert('Anda kembali online! Mensinkronisasi data...');
                     handleSaveMonth();
-                    localStorage.removeItem('sync_queue');
+                    localStorage.removeItem(syncQueueKey);
                 }
             }
         };
@@ -112,9 +119,10 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
         try {
             const budget = await getBudgetForMonth(key);
             if (budget) {
+                // Server data takes priority — overwrite any local cache
                 setMonthlyBudgetName(budget.name);
-                setIncomes(budget.incomes.map((i: any) => ({ id: i.id, name: i.name, amount: Number(i.amount) })));
-                setCategories(budget.expenseCategories.map((c: any) => ({
+                const serverIncomes = budget.incomes.map((i: any) => ({ id: i.id, name: i.name, amount: Number(i.amount) }));
+                const serverCategories = budget.expenseCategories.map((c: any) => ({
                     id: c.id,
                     name: c.name,
                     isExpanded: true,
@@ -124,11 +132,19 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                         amount: Number(item.amount),
                         isChecked: item.isChecked
                     }))
-                })));
+                }));
+                setIncomes(serverIncomes);
+                setCategories(serverCategories);
+                // Sync local cache with fresh server data
+                if (storageKey) {
+                    localStorage.setItem(storageKey, JSON.stringify({ incomes: serverIncomes, categories: serverCategories }));
+                }
             } else {
                 setMonthlyBudgetName('');
                 setIncomes([]);
                 setCategories([]);
+                // Clear stale local cache for this month if server has nothing
+                if (storageKey) localStorage.removeItem(storageKey);
             }
         } catch (e) {
             setError('Gagal memuat data');
@@ -226,7 +242,7 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
 
     const handleSaveMonth = async () => {
         if (!navigator.onLine) {
-            localStorage.setItem('sync_queue', JSON.stringify([{ type: 'saveMonth', date: new Date().toISOString() }]));
+            if (syncQueueKey) localStorage.setItem(syncQueueKey, JSON.stringify([{ type: 'saveMonth', date: new Date().toISOString() }]));
             alert('Offline: Perubahan disimpan di perangkat dan akan disinkronkan saat online.');
             return;
         }
