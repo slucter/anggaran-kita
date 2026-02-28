@@ -435,6 +435,22 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
         }
     };
 
+    const handleDeleteSubBudget = async (id: string, name: string) => {
+        if (!confirm(`Hapus anggaran "${name}"? Data di dalamnya akan hilang.`)) return;
+        setLoading(true);
+        try {
+            await deleteTemplate(id); // deleteTemplate works for any budget id
+            alert('Berhasil dihapus!');
+            // Re-load the month, this will automatically select the first tab ('Perencanaan')
+            setActiveBudgetId(null);
+            loadMonthData(monthKey);
+        } catch (e) {
+            alert('Gagal menghapus anggaran');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const formatIDR = (val: number) => {
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
     };
@@ -608,28 +624,41 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
             {/* Sub-Budget Tabs */}
             {mode !== 'templates' && (
                 <div className="flex gap-2 overflow-x-auto pb-2 pt-1 no-scrollbar items-center">
-                    {monthlyBudgets.map((b) => (
-                        <button
-                            key={b.id}
-                            onClick={() => {
-                                setActiveBudgetId(b.id);
-                                const serverIncomes = b.incomes.map((i: any) => ({ ...i, amount: Number(i.amount) }));
-                                const serverCategories = b.expenseCategories.map((c: any) => ({
-                                    ...c,
-                                    isExpanded: false,
-                                    items: c.expenseItems.map((item: any) => ({ ...item, amount: Number(item.amount) }))
-                                }));
-                                setIncomes(serverIncomes);
-                                setCategories(serverCategories);
-                                setMonthlyBudgetName(b.name);
-                            }}
-                            className={cn("whitespace-nowrap px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest transition-all border",
-                                activeBudgetId === b.id
-                                    ? "bg-secondary text-white border-secondary shadow-lg shadow-secondary/20"
-                                    : "bg-white/5 text-muted-foreground border-white/5 hover:bg-white/10")}
-                        >
-                            {b.name}
-                        </button>
+                    {monthlyBudgets.map((b, idx) => (
+                        <div key={b.id} className="relative flex items-center shrink-0">
+                            <button
+                                onClick={() => {
+                                    setActiveBudgetId(b.id);
+                                    const serverIncomes = b.incomes.map((i: any) => ({ ...i, amount: Number(i.amount) }));
+                                    const serverCategories = b.expenseCategories.map((c: any) => ({
+                                        ...c,
+                                        isExpanded: false,
+                                        items: c.expenseItems.map((item: any) => ({ ...item, amount: Number(item.amount) }))
+                                    }));
+                                    setIncomes(serverIncomes);
+                                    setCategories(serverCategories);
+                                    setMonthlyBudgetName(b.name);
+                                }}
+                                className={cn("whitespace-nowrap px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest transition-all border flex items-center gap-2",
+                                    activeBudgetId === b.id
+                                        ? "bg-secondary text-white border-secondary shadow-lg shadow-secondary/20"
+                                        : "bg-white/5 text-muted-foreground border-white/5 hover:bg-white/10")}
+                            >
+                                {b.name}
+                            </button>
+                            {/* Only show delete button for the active tab, and only if it's NOT the very first (main) budget */}
+                            {activeBudgetId === b.id && idx !== 0 && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteSubBudget(b.id, b.name);
+                                    }}
+                                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-md active:scale-90"
+                                >
+                                    <X size={10} />
+                                </button>
+                            )}
+                        </div>
                     ))}
                     <button
                         onClick={() => setShowSubBudgetModal(true)}
