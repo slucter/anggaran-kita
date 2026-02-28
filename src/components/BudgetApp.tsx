@@ -163,6 +163,19 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
     }, [monthKey]);
 
     const totalIncome = useMemo(() => incomes.reduce((acc, curr) => acc + curr.amount, 0), [incomes]);
+
+    // Number formatting helpers
+    const formatNumber = (val: number): string => {
+        if (!val && val !== 0) return '';
+        return val === 0 ? '' : val.toLocaleString('id-ID');
+    };
+    const parseNumber = (str: string): number => {
+        const cleaned = str.replace(/\./g, '').replace(/[^0-9]/g, '');
+        return cleaned ? parseInt(cleaned, 10) : 0;
+    };
+    const handleAmountInput = (raw: string, setter: (n: number) => void) => {
+        setter(parseNumber(raw));
+    };
     const totalExpense = useMemo(() => {
         return categories.reduce((acc, cat) => {
             return acc + cat.items.reduce((iAcc, item) => iAcc + item.amount, 0);
@@ -591,13 +604,13 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                 ) : mode === 'edit' && (
                     <motion.div key="edit" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6 pb-32">
                         <section className="glass-card space-y-4">
-                            <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                            <div className="flex justify-between items-center pb-2">
                                 <h2 className="text-xs font-black flex items-center gap-2 uppercase tracking-widest"><ArrowDownCircle className="text-green-400" size={16} /> Pemasukan</h2>
                                 <button onClick={handleAddIncome} className="p-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-all"><Plus size={16} /></button>
                             </div>
-                            <div className="space-y-6">
+                            <div className="space-y-2">
                                 {incomes.map((inc, i) => (
-                                    <div key={i} className="space-y-2 pb-6 border-b border-white/5 last:border-0 last:pb-0">
+                                    <div key={i} className="space-y-2 pb-2 border-b border-white/5 last:border-0 last:pb-0">
                                         <div className="flex gap-2 items-center">
                                             <input
                                                 className="input-field flex-1 text-sm font-black py-3"
@@ -609,10 +622,11 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                                         </div>
                                         <input
                                             className="input-field w-full text-base font-bold py-3 text-primary"
-                                            type="number"
-                                            placeholder="Nominal (e.g. 8000000)"
-                                            value={inc.amount}
-                                            onChange={(e) => handleIncomeChange(i, 'amount', e.target.value)}
+                                            type="text"
+                                            inputMode="numeric"
+                                            placeholder="0"
+                                            value={formatNumber(inc.amount)}
+                                            onChange={(e) => handleAmountInput(e.target.value, (n) => handleIncomeChange(i, 'amount', n))}
                                         />
                                     </div>
                                 ))}
@@ -626,21 +640,21 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                             </div>
                             {categories.map((cat, catIdx) => (
                                 <div key={catIdx} className="glass-card overflow-hidden">
-                                    <div className="flex items-center gap-3 mb-6">
+                                    <div className="flex items-center gap-3">
                                         <button onClick={() => {
                                             const n = [...categories]; n[catIdx].isExpanded = !n[catIdx].isExpanded; setCategories(n);
                                         }} className="text-primary">{cat.isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>
                                         <input
-                                            className="bg-transparent text-sm font-black text-white outline-none flex-1 border-b border-white/5 uppercase tracking-wide"
+                                            className="bg-transparent text-sm font-black text-white outline-none flex-1  border-white/5 uppercase tracking-wide"
                                             value={cat.name}
                                             onChange={(e) => { const n = [...categories]; n[catIdx].name = e.target.value; setCategories(n); }}
                                         />
                                         <button onClick={() => setCategories(categories.filter((_, i) => i !== catIdx))} className="text-red-400/30 hover:text-red-400"><Trash2 size={16} /></button>
                                     </div>
                                     {cat.isExpanded && (
-                                        <div className="space-y-8 border-t border-white/5 pt-6">
+                                        <div className="space-y-2 pt-4">
                                             {cat.items.map((item, itemIdx) => (
-                                                <div key={itemIdx} className="space-y-2 pb-8 border-b border-white/5 last:border-b-0 last:pb-0">
+                                                <div key={itemIdx} className="space-y-2 pb-2 border-b border-white/5 last:border-b-0 last:pb-0">
                                                     <div className="flex gap-2 items-center">
                                                         <input
                                                             className="input-field flex-1 text-sm font-black py-3"
@@ -652,10 +666,11 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                                                     </div>
                                                     <input
                                                         className="input-field w-full text-base font-bold py-3 text-secondary"
-                                                        type="number"
-                                                        placeholder="Biaya (e.g. 750000)"
-                                                        value={item.amount}
-                                                        onChange={(e) => handleItemChange(catIdx, itemIdx, 'amount', Number(e.target.value))}
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        placeholder="0"
+                                                        value={formatNumber(item.amount)}
+                                                        onChange={(e) => handleAmountInput(e.target.value, (n) => handleItemChange(catIdx, itemIdx, 'amount', n))}
                                                     />
                                                 </div>
                                             ))}
