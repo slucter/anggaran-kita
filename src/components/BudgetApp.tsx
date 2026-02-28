@@ -709,10 +709,10 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                         <div className="fixed bottom-0 left-0 right-0 px-6 py-6 bg-slate-950 border-t border-white/10 z-50">
                             <div className="flex gap-3 max-w-sm mx-auto">
                                 <button onClick={handleSaveMonth} className="btn-primary flex-1 flex items-center justify-center gap-2 text-[10px] font-bold py-3 shadow-lg">
-                                    <Save size={16} /> SIMPAN BULAN
+                                    <Save size={16} /> SIMPAN ANGGARAN
                                 </button>
                                 <button onClick={() => setShowTemplateModal(true)} className="btn-secondary flex-1 flex items-center justify-center gap-2 text-[10px] font-bold py-3 shadow-lg">
-                                    <Copy size={16} /> MASTER
+                                    <Copy size={16} /> SIMPAN TEMPLATE
                                 </button>
                             </div>
                         </div>
