@@ -8,7 +8,7 @@ import {
     TrendingDown, TrendingUp, LayoutList, Calendar,
     ChevronLeft, ChevronRight, Copy, CheckSquare, X
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { saveFullTemplate, updateItemCheckStatus, cloneBudget, getBudgetForMonth, getTemplates, deleteTemplate, login, register } from '@/lib/actions';
@@ -26,7 +26,7 @@ interface Item {
 }
 
 interface Category {
-    id?: string;
+    id: string; // Force stable unique ID
     name: string;
     items: Item[];
     isExpanded: boolean;
@@ -42,6 +42,70 @@ interface BudgetAppProps {
     initialTemplates?: any[];
     user?: { id: string, username: string, fullname: string } | null;
     logoutAction?: () => Promise<void>;
+}
+
+// Subcomponent for drag-and-drop sorting via framer-motion
+function CategoryCard({
+    cat, catIdx, categories, setCategories, handleItemChange,
+    handleRemoveItem, handleAmountInput, handleAddItem, formatNumber
+}: {
+    cat: Category; catIdx: number; categories: Category[]; setCategories: any;
+    handleItemChange: any; handleRemoveItem: any; handleAmountInput: any; handleAddItem: any; formatNumber: any;
+}) {
+    const controls = useDragControls();
+
+    return (
+        <Reorder.Item
+            value={cat.id}
+            dragListener={false}
+            dragControls={controls}
+            className="glass-card overflow-hidden select-none"
+        >
+            <div className="flex items-center gap-2">
+                <div
+                    className="text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing shrink-0 touch-none py-2"
+                    onPointerDown={(e) => controls.start(e)}
+                >
+                    <GripVertical size={18} />
+                </div>
+                <button onClick={() => {
+                    const n = [...categories]; n[catIdx].isExpanded = !n[catIdx].isExpanded; setCategories(n);
+                }} className="text-primary shrink-0">{cat.isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>
+                <input
+                    className="bg-transparent text-sm font-black text-white outline-none flex-1 border-white/5 uppercase tracking-wide"
+                    value={cat.name}
+                    onChange={(e) => { const n = [...categories]; n[catIdx].name = e.target.value; setCategories(n); }}
+                />
+                <button onClick={() => setCategories(categories.filter((_: any, i: number) => i !== catIdx))} className="text-red-400/30 hover:text-red-400 shrink-0"><Trash2 size={16} /></button>
+            </div>
+            {cat.isExpanded && (
+                <div className="space-y-2 pt-4">
+                    {cat.items.map((item: any, itemIdx: number) => (
+                        <div key={itemIdx} className="space-y-2 pb-2 border-b border-white/5 last:border-b-0 last:pb-0">
+                            <div className="flex gap-2 items-center">
+                                <input
+                                    className="input-field flex-1 text-sm font-black py-3"
+                                    placeholder="Nama Item (e.g. Bebelove)"
+                                    value={item.name}
+                                    onChange={(e) => handleItemChange(catIdx, itemIdx, 'name', e.target.value)}
+                                />
+                                <button onClick={() => handleRemoveItem(catIdx, itemIdx)} className="text-red-400/50 hover:text-red-400 transition-all p-2"><Trash2 size={18} /></button>
+                            </div>
+                            <input
+                                className="input-field w-full text-base font-bold py-3 text-secondary"
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="0"
+                                value={formatNumber(item.amount)}
+                                onChange={(e) => handleAmountInput(e.target.value, (n: number) => handleItemChange(catIdx, itemIdx, 'amount', n))}
+                            />
+                        </div>
+                    ))}
+                    <button onClick={() => handleAddItem(catIdx)} className="w-full py-4 border border-dashed border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-white/5 hover:border-white/20 transition-all">+ TAMBAH ITEM</button>
+                </div>
+            )}
+        </Reorder.Item>
+    );
 }
 
 export default function BudgetApp({ initialTemplates = [], user, logoutAction }: BudgetAppProps) {
@@ -86,7 +150,7 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
         if (savedData && incomes.length === 0 && categories.length === 0) {
             const parsed = JSON.parse(savedData);
             setIncomes(parsed.incomes || []);
-            setCategories(parsed.categories || []);
+            setCategories(parsed.categories?.map((c: any) => ({ ...c, id: c.id || crypto.randomUUID() })) || []);
         }
     }, [storageKey]);
 
@@ -129,7 +193,7 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                 setMonthlyBudgetName(budget.name);
                 const serverIncomes = budget.incomes.map((i: any) => ({ id: i.id, name: i.name, amount: Number(i.amount) }));
                 const serverCategories = budget.expenseCategories.map((c: any) => ({
-                    id: c.id,
+                    id: c.id || crypto.randomUUID(),
                     name: c.name,
                     isExpanded: false,
                     items: c.expenseItems.map((item: any) => ({
@@ -602,7 +666,7 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                             <button onClick={() => setMode('templates')} className="btn-secondary w-full text-[10px] font-black tracking-widest">GUNAKAN TEMPLATE</button>
                             <button onClick={() => {
                                 setIncomes([{ name: 'Gaji', amount: 0 }]);
-                                setCategories([{ name: 'Umum', isExpanded: false, items: [] }]);
+                                setCategories([{ id: crypto.randomUUID(), name: 'Umum', isExpanded: false, items: [] }]);
                                 setMode('edit');
                             }} className="btn-primary w-full text-[10px] font-black tracking-widest">BUAT BARU</button>
                         </div>
@@ -642,68 +706,32 @@ export default function BudgetApp({ initialTemplates = [], user, logoutAction }:
                         <section className="space-y-4">
                             <div className="flex justify-between items-center px-1">
                                 <h2 className="text-xs font-black flex items-center gap-2 uppercase tracking-widest"><TrendingDown className="text-red-400" size={16} /> Pengeluaran</h2>
-                                <button onClick={() => setCategories([...categories, { name: 'Kategori Baru', isExpanded: false, items: [] }])} className="btn-secondary text-[10px] font-black tracking-widest px-3 py-1.5">+ KATEGORI</button>
+                                <button onClick={() => setCategories([...categories, { id: crypto.randomUUID(), name: 'Kategori Baru', isExpanded: false, items: [] }])} className="btn-secondary text-[10px] font-black tracking-widest px-3 py-1.5">+ KATEGORI</button>
                             </div>
-                            {categories.map((cat, catIdx) => (
-                                <div
-                                    key={catIdx}
-                                    draggable
-                                    onDragStart={() => { dragIndex.current = catIdx; }}
-                                    onDragOver={(e) => e.preventDefault()}
-                                    onDrop={() => {
-                                        if (dragIndex.current === null || dragIndex.current === catIdx) return;
-                                        const n = [...categories];
-                                        const [moved] = n.splice(dragIndex.current, 1);
-                                        n.splice(catIdx, 0, moved);
-                                        setCategories(n);
-                                        dragIndex.current = null;
-                                    }}
-                                    className="glass-card overflow-hidden select-none"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        {/* Drag handle */}
-                                        <div className="text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing shrink-0">
-                                            <GripVertical size={18} />
-                                        </div>
-                                        {/* Expand toggle */}
-                                        <button onClick={() => {
-                                            const n = [...categories]; n[catIdx].isExpanded = !n[catIdx].isExpanded; setCategories(n);
-                                        }} className="text-primary shrink-0">{cat.isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>
-                                        <input
-                                            className="bg-transparent text-sm font-black text-white outline-none flex-1 border-white/5 uppercase tracking-wide"
-                                            value={cat.name}
-                                            onChange={(e) => { const n = [...categories]; n[catIdx].name = e.target.value; setCategories(n); }}
-                                        />
-                                        <button onClick={() => setCategories(categories.filter((_, i) => i !== catIdx))} className="text-red-400/30 hover:text-red-400 shrink-0"><Trash2 size={16} /></button>
-                                    </div>
-                                    {cat.isExpanded && (
-                                        <div className="space-y-2 pt-4">
-                                            {cat.items.map((item, itemIdx) => (
-                                                <div key={itemIdx} className="space-y-2 pb-2 border-b border-white/5 last:border-b-0 last:pb-0">
-                                                    <div className="flex gap-2 items-center">
-                                                        <input
-                                                            className="input-field flex-1 text-sm font-black py-3"
-                                                            placeholder="Nama Item (e.g. Bebelove)"
-                                                            value={item.name}
-                                                            onChange={(e) => handleItemChange(catIdx, itemIdx, 'name', e.target.value)}
-                                                        />
-                                                        <button onClick={() => handleRemoveItem(catIdx, itemIdx)} className="text-red-400/50 hover:text-red-400 transition-all p-2"><Trash2 size={18} /></button>
-                                                    </div>
-                                                    <input
-                                                        className="input-field w-full text-base font-bold py-3 text-secondary"
-                                                        type="text"
-                                                        inputMode="numeric"
-                                                        placeholder="0"
-                                                        value={formatNumber(item.amount)}
-                                                        onChange={(e) => handleAmountInput(e.target.value, (n) => handleItemChange(catIdx, itemIdx, 'amount', n))}
-                                                    />
-                                                </div>
-                                            ))}
-                                            <button onClick={() => handleAddItem(catIdx)} className="w-full py-4 border border-dashed border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:bg-white/5 hover:border-white/20 transition-all">+ TAMBAH ITEM</button>
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                            <Reorder.Group
+                                axis="y"
+                                values={categories.map(c => c.id)}
+                                onReorder={(newIds: string[]) => {
+                                    const sorted = newIds.map((id: string) => categories.find(c => c.id === id)!).filter(Boolean);
+                                    setCategories(sorted);
+                                }}
+                                className="space-y-4"
+                            >
+                                {categories.map((cat, catIdx) => (
+                                    <CategoryCard
+                                        key={cat.id}
+                                        cat={cat}
+                                        catIdx={catIdx}
+                                        categories={categories}
+                                        setCategories={setCategories}
+                                        handleItemChange={handleItemChange}
+                                        handleRemoveItem={handleRemoveItem}
+                                        handleAmountInput={handleAmountInput}
+                                        handleAddItem={handleAddItem}
+                                        formatNumber={formatNumber}
+                                    />
+                                ))}
+                            </Reorder.Group>
                         </section>
 
                         <div className="fixed bottom-0 left-0 right-0 px-6 py-6 bg-slate-950 border-t border-white/10 z-50">
